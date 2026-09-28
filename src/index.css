@@ -554,3 +554,54 @@ select {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Workout controls & time editing ---------- */
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.secondary.compact {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.times-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -8px 0;
+}
+
+.times-toggle .link-button {
+  padding: 0;
+}
+
+.time-range {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.time-range-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.time-range input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 4px 6px;
+}
+
+/* Room for HH:MM:SS AM on small screens; tapping still opens the picker. */
+.time-range input::-webkit-calendar-picker-indicator {
+  display: none;
+}

@@ -49,29 +49,39 @@ function pad(n) {
   return String(n).padStart(2, '0')
 }
 
-// Today's date as YYYY-MM-DD.
-export function today() {
-  const d = new Date()
+function dateString(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-// The current time as HH:MM, the format <input type="time"> uses.
-export function nowTime() {
-  const d = new Date()
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+// Today's date as YYYY-MM-DD.
+export function today() {
+  return dateString(new Date())
 }
 
-// HH:MM of an ISO timestamp, or '' if there is none.
-export function timeOf(iso) {
+// The local date (YYYY-MM-DD) of an ISO timestamp.
+export function localDate(iso) {
+  return dateString(new Date(iso))
+}
+
+// HH:MM (or HH:MM:SS) of an ISO timestamp, the format <input type="time"> uses; '' if none.
+export function clockOf(iso, withSeconds = false) {
   if (!iso) return ''
   const d = new Date(iso)
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return withSeconds ? `${time}:${pad(d.getSeconds())}` : time
 }
 
-// ISO timestamp for a local date (YYYY-MM-DD) and time (HH:MM), optionally days later.
-export function toTimestamp(date, time, addDays = 0) {
-  const d = new Date(`${date}T${time}`)
-  d.setDate(d.getDate() + addDays)
+const TWELVE_HOURS = 12 * 60 * 60 * 1000
+
+// ISO timestamp for a time of day (HH:MM or HH:MM:SS) on a local date.
+// Returns null for an empty time. When `notBefore` (a start time) is given and
+// the result is more than 12 hours before it, it's moved to the next day, since
+// that's an end past midnight (11:50 PM → 12:10 AM). A smaller gap is left
+// alone so it can be flagged as a mistake.
+export function withClock(time, date, notBefore = null) {
+  if (!time) return null
+  const d = new Date(`${date}T${time.length === 5 ? `${time}:00` : time}`)
+  if (notBefore && Date.parse(notBefore) - d.getTime() > TWELVE_HOURS) d.setDate(d.getDate() + 1)
   return d.toISOString()
 }
 

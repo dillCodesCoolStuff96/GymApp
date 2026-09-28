@@ -129,7 +129,7 @@ export async function deleteWorkout(id) {
 
 // An in-progress new workout is saved on every change, so closing the
 // browser tab mid-session at the gym doesn't lose anything.
-const DRAFT_KEY = 'gymapp.draft.v2'
+const DRAFT_KEY = 'gymapp.draft.v3'
 
 export function loadDraft() {
   try {

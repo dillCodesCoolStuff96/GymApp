@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import TimeRange from './TimeRange.jsx'
+import TimerBar from './TimerBar.jsx'
 import { clearDraft, loadDraft, newId, saveDraft } from '../storage.js'
 import {
   DIFFICULTY,
@@ -8,11 +10,8 @@ import {
   WORKOUT_TYPES,
   formatClock,
   formatDuration,
-  nowTime,
   restBeforeSets,
   secondsBetween,
-  timeOf,
-  toTimestamp,
   today,
 } from '../workout.js'
 
@@ -43,6 +42,18 @@ function blankExercise(startedAt = null) {
   }
 }
 
+function blankWorkout() {
+  return {
+    date: today(),
+    startedAt: null,
+    endedAt: null,
+    type: '',
+    location: '',
+    notes: '',
+    exercises: [blankExercise()],
+  }
+}
+
 // Stops a running set and marks a started exercise as finished.
 function finishExercise(exercise, at) {
   return {
@@ -52,35 +63,17 @@ function finishExercise(exercise, at) {
   }
 }
 
-// The current time, updated every second while `active`.
-function useNow(active) {
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    if (!active) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [active])
-  return now
+// Ends the workout and everything still running in it.
+function endWorkout(workout, at) {
+  return { ...workout, endedAt: at, exercises: workout.exercises.map((e) => finishExercise(e, at)) }
 }
 
-function blankWorkout() {
-  return {
-    date: today(),
-    startTime: nowTime(),
-    endTime: '',
-    type: '',
-    location: '',
-    notes: '',
-    exercises: [blankExercise(nowIso())],
-  }
-}
-
-// Saved workouts store numbers (or null) and timestamps; the form works with strings.
+// Saved workouts store numbers (or null); the form works with strings.
 function toFormState(workout) {
   return {
     date: workout.date,
-    startTime: timeOf(workout.startedAt),
-    endTime: timeOf(workout.endedAt),
+    startedAt: workout.startedAt,
+    endedAt: workout.endedAt,
     type: workout.type,
     location: workout.location,
     notes: workout.notes,
@@ -108,26 +101,36 @@ function toNumber(value) {
   return value === '' ? null : Number(value)
 }
 
+function endsBeforeStart({ startedAt, endedAt }) {
+  return startedAt && endedAt && Date.parse(endedAt) < Date.parse(startedAt)
+}
+
+// The current time, updated every second while `active`.
+function useNow(active) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (!active) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [active])
+  return now
+}
+
 export default function WorkoutForm({ initial, catalog, locations, onSave, onCancel }) {
   const isEditing = Boolean(initial)
   const [workout, setWorkout] = useState(() =>
     isEditing ? toFormState(initial) : (loadDraft() ?? blankWorkout()),
   )
+  const [showTimes, setShowTimes] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const exerciseNames = useMemo(() => [...new Set(catalog.map((e) => e.name))], [catalog])
 
-  // Logging a new workout today: exercises and sets are timed as they happen.
+  // Logging a new workout today: the timer bar times the workout, exercises and sets.
   const isLive = !isEditing && workout.date === today()
-
-  // The timer bar works on the newest exercise.
-  const current = workout.exercises.at(-1)
-  const runningSetIndex = current ? current.sets.findIndex((s) => s.startedAt && !s.endedAt) : -1
-  const runningSet = current?.sets[runningSetIndex]
-  const lastTimedIndex = current ? current.sets.findLastIndex((s) => s.startedAt) : -1
-  const lastDoneSet = current?.sets.findLast((s) => s.endedAt)
-  const now = useNow(isLive && Boolean(runningSet || lastDoneSet))
+  const inProgress = isLive && Boolean(workout.startedAt) && !workout.endedAt
+  const now = useNow(inProgress)
   const secondsSince = (iso) => Math.max(0, Math.round((now - Date.parse(iso)) / 1000))
 
   useEffect(() => {
@@ -155,39 +158,72 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
     updateExercise(exerciseId, (e) => ({ ...e, name, equipment: match?.equipment ?? e.equipment }))
   }
 
-  // When live, adding an exercise finishes the previous one.
+  // ---------- Live timing ----------
+
+  // The newest exercise starts along with the workout.
+  function startWorkout() {
+    const at = nowIso()
+    setWorkout((w) => ({
+      ...w,
+      startedAt: at,
+      endedAt: null,
+      exercises: w.exercises.map((e, i) =>
+        i === w.exercises.length - 1 && !e.startedAt ? { ...e, startedAt: at } : e,
+      ),
+    }))
+  }
+
+  function finishWorkout() {
+    setWorkout((w) => endWorkout(w, nowIso()))
+  }
+
+  // Undo an accidental End workout; the next set restarts the current exercise.
+  function resumeWorkout() {
+    update({ endedAt: null })
+  }
+
+  // Starts the set after the last timed one on the newest exercise, adding a set if needed.
+  function startNextSet() {
+    const at = nowIso()
+    setWorkout((w) => {
+      const current = w.exercises.at(-1)
+      const index = current.sets.findLastIndex((s) => s.startedAt) + 1
+      const sets =
+        index < current.sets.length ? current.sets : [...current.sets, blankSet(current.sets.at(-1))]
+      const started = {
+        ...current,
+        startedAt: current.startedAt ?? at,
+        endedAt: null,
+        sets: sets.map((s, i) => (i === index ? { ...s, startedAt: at } : s)),
+      }
+      return { ...w, exercises: [...w.exercises.slice(0, -1), started] }
+    })
+  }
+
+  function finishSet() {
+    const at = nowIso()
+    setWorkout((w) => ({
+      ...w,
+      exercises: w.exercises.map((e, i) =>
+        i === w.exercises.length - 1
+          ? { ...e, sets: e.sets.map((s) => (s.startedAt && !s.endedAt ? { ...s, endedAt: at } : s)) }
+          : e,
+      ),
+    }))
+  }
+
+  // ---------- Editing ----------
+
+  // During a workout, adding an exercise finishes the previous one.
   function addExercise() {
     setWorkout((w) => {
-      if (!isLive) return { ...w, exercises: [...w.exercises, blankExercise()] }
+      if (!inProgress) return { ...w, exercises: [...w.exercises, blankExercise()] }
       const at = nowIso()
       return {
         ...w,
         exercises: [...w.exercises.map((e) => finishExercise(e, at)), blankExercise(at)],
       }
     })
-  }
-
-  // Starts the set after the last timed one, adding a set if needed.
-  function startNextSet() {
-    const at = nowIso()
-    updateExercise(current.id, (e) => {
-      const index = e.sets.findLastIndex((s) => s.startedAt) + 1
-      const sets = index < e.sets.length ? e.sets : [...e.sets, blankSet(e.sets.at(-1))]
-      return {
-        ...e,
-        startedAt: e.startedAt ?? at,
-        endedAt: null,
-        sets: sets.map((s, i) => (i === index ? { ...s, startedAt: at } : s)),
-      }
-    })
-  }
-
-  function finishSet() {
-    const at = nowIso()
-    updateExercise(current.id, (e) => ({
-      ...e,
-      sets: e.sets.map((s) => (s.startedAt && !s.endedAt ? { ...s, endedAt: at } : s)),
-    }))
   }
 
   function removeExercise(exerciseId) {
@@ -228,9 +264,10 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
   async function handleSubmit(event) {
     event.preventDefault()
 
-    const savedAt = nowIso()
-    const exercises = workout.exercises
-      .map((e) => (isLive ? finishExercise(e, savedAt) : e))
+    // Saving a workout that's still going ends it now.
+    const final = inProgress ? endWorkout(workout, nowIso()) : workout
+
+    const exercises = final.exercises
       .map((e) => ({
         id: e.id,
         // Use the known exercise's capitalization ("bench press" → "Bench Press").
@@ -259,11 +296,12 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
       return
     }
 
-    // Saving a new workout on the day it happens means it just finished.
-    let { startTime, endTime } = workout
-    if (!endTime && !isEditing && workout.date === today()) endTime = nowTime()
-    // An end time before the start time means the workout went past midnight.
-    const endDayOffset = startTime && endTime && endTime < startTime ? 1 : 0
+    const ranges = [final, ...exercises, ...exercises.flatMap((e) => e.sets)]
+    if (ranges.some(endsBeforeStart)) {
+      setShowTimes(true)
+      setError('One of the end times is before its start time. Check the times and try again.')
+      return
+    }
 
     const now = Date.now()
     setSaving(true)
@@ -273,12 +311,12 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
         id: initial?.id ?? newId(),
         createdAt: initial?.createdAt ?? now,
         updatedAt: now,
-        date: workout.date,
-        startedAt: startTime ? toTimestamp(workout.date, startTime) : null,
-        endedAt: endTime ? toTimestamp(workout.date, endTime, endDayOffset) : null,
-        type: workout.type.trim() || 'Workout',
-        location: workout.location.trim(),
-        notes: workout.notes.trim(),
+        date: final.date,
+        startedAt: final.startedAt,
+        endedAt: final.endedAt,
+        type: final.type.trim() || 'Workout',
+        location: final.location.trim(),
+        notes: final.notes.trim(),
         exercises,
       })
       if (!isEditing) clearDraft()
@@ -291,7 +329,19 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
 
   return (
     <form className={`workout-form${isLive ? ' has-timer' : ''}`} onSubmit={handleSubmit}>
-      <h2>{isEditing ? 'Edit workout' : 'Log workout'}</h2>
+      <div className="form-header">
+        <h2>{isEditing ? 'Edit workout' : 'Log workout'}</h2>
+        {inProgress && (
+          <button type="button" className="secondary compact" onClick={finishWorkout}>
+            End workout
+          </button>
+        )}
+        {isLive && workout.endedAt && (
+          <button type="button" className="secondary compact" onClick={resumeWorkout}>
+            Resume
+          </button>
+        )}
+      </div>
 
       <div className="row">
         <label className="field">
@@ -319,28 +369,6 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
         </label>
       </div>
 
-      <div className="row">
-        <label className="field">
-          <span>Start</span>
-          <input
-            type="time"
-            value={workout.startTime}
-            onChange={(e) => update({ startTime: e.target.value })}
-          />
-        </label>
-        <label className="field">
-          <span>End</span>
-          <input
-            type="time"
-            value={workout.endTime}
-            onChange={(e) => update({ endTime: e.target.value })}
-          />
-        </label>
-      </div>
-      {!isEditing && !workout.endTime && (
-        <p className="hint">Leave End blank and it's set when you save.</p>
-      )}
-
       <label className="field">
         <span>Location</span>
         <input
@@ -355,6 +383,27 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
           ))}
         </datalist>
       </label>
+
+      <div className="times-toggle">
+        <button type="button" className="link-button" onClick={() => setShowTimes((v) => !v)}>
+          {showTimes ? 'Hide times' : 'Adjust times'}
+        </button>
+        {workout.startedAt && workout.endedAt && (
+          <span className="muted small">
+            Workout took {formatDuration(workout.startedAt, workout.endedAt)}
+          </span>
+        )}
+      </div>
+
+      {showTimes && (
+        <TimeRange
+          label="Workout"
+          startedAt={workout.startedAt}
+          endedAt={workout.endedAt}
+          date={workout.date}
+          onChange={update}
+        />
+      )}
 
       <datalist id="exercise-names">
         {exerciseNames.map((name) => (
@@ -383,8 +432,20 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
             </button>
           </div>
 
-          {exercise.startedAt && exercise.endedAt && (
-            <p className="hint">Took {formatDuration(exercise.startedAt, exercise.endedAt)}</p>
+          {showTimes ? (
+            <TimeRange
+              label="Exercise"
+              withSeconds
+              startedAt={exercise.startedAt}
+              endedAt={exercise.endedAt}
+              date={workout.date}
+              onChange={(times) => updateExercise(exercise.id, (e) => ({ ...e, ...times }))}
+            />
+          ) : (
+            exercise.startedAt &&
+            exercise.endedAt && (
+              <p className="hint">Took {formatDuration(exercise.startedAt, exercise.endedAt)}</p>
+            )
           )}
 
           <select
@@ -457,6 +518,16 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
                       set={set}
                       restBefore={restBeforeSets(exercise.sets)[setIndex]}
                       secondsSince={secondsSince}
+                    />
+                  )}
+                  {showTimes && (
+                    <TimeRange
+                      label={`Set ${setIndex + 1}`}
+                      withSeconds
+                      startedAt={set.startedAt}
+                      endedAt={set.endedAt}
+                      date={workout.date}
+                      onChange={(times) => updateSet(exercise.id, set.id, times)}
                     />
                   )}
                 </div>
@@ -534,30 +605,15 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
         </button>
       </div>
 
-      {isLive && current && (
-        <div className="timer-bar">
-          <div className="timer-status">
-            <span className="timer-label">
-              {current.name.trim() || `Exercise ${workout.exercises.length}`}
-            </span>
-            <strong className="timer-clock">
-              {runningSet
-                ? `Set ${runningSetIndex + 1} · ${formatClock(secondsSince(runningSet.startedAt))}`
-                : lastDoneSet
-                  ? `Resting ${formatClock(secondsSince(lastDoneSet.endedAt))}`
-                  : 'Ready'}
-            </strong>
-          </div>
-          {runningSet ? (
-            <button type="button" className="primary timer-button done" onClick={finishSet}>
-              ■ Done
-            </button>
-          ) : (
-            <button type="button" className="primary timer-button" onClick={startNextSet}>
-              ▶ Start set {lastTimedIndex + 2}
-            </button>
-          )}
-        </div>
+      {isLive && (
+        <TimerBar
+          workout={workout}
+          secondsSince={secondsSince}
+          saving={saving}
+          onStartWorkout={startWorkout}
+          onStartSet={startNextSet}
+          onFinishSet={finishSet}
+        />
       )}
     </form>
   )
