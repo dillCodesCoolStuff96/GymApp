@@ -193,7 +193,7 @@ export default function WorkoutForm({ initial, catalog, locations, onSave, onCan
       if (!isEditing) clearDraft()
     } catch (err) {
       // The draft is kept, so nothing is lost; the user can retry.
-      setError(`Couldn't save: ${err.message}. Check your connection and try again.`)
+      setError(`Couldn't save: ${err.message}. Your workout is still here, so you can try again.`)
       setSaving(false)
     }
   }
