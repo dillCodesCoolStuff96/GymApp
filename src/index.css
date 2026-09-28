@@ -147,6 +147,7 @@ h2 {
 
 /* 16px font stops iOS Safari from zooming in when an input is focused. */
 input,
+select,
 textarea {
   width: 100%;
   min-height: 44px;
@@ -160,6 +161,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
@@ -286,8 +288,8 @@ button {
 
 .set-row {
   display: grid;
-  grid-template-columns: 36px 1fr 1fr 44px;
-  gap: 8px;
+  grid-template-columns: 28px 1fr 1fr 1.2fr 40px;
+  gap: 6px;
   align-items: center;
 }
 
@@ -443,4 +445,55 @@ button:disabled {
 
 code {
   font-size: 0.9em;
+}
+
+/* ---------- Exercise details ---------- */
+
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+}
+
+.set-row input,
+.set-row select {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.set-row select {
+  padding-right: 18px;
+  background-position: calc(100% - 11px) 50%, calc(100% - 6px) 50%;
+  font-size: 14px;
+}
+
+.set-row .icon-button {
+  width: 40px;
+}
+
+.hint {
+  margin: -8px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.exercise-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.exercise-line .badge {
+  align-self: center;
+}
+
+.exercise-notes {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
 }

@@ -1,8 +1,11 @@
 import {
   WEIGHT_UNIT,
   difficultyLabel,
+  equipmentLabel,
   formatDate,
+  formatDuration,
   formatSet,
+  formatTime,
   workoutStats,
 } from '../workout.js'
 
@@ -21,30 +24,45 @@ export default function WorkoutHistory({ workouts, onEdit, onDelete }) {
       <h2>History</h2>
       {workouts.map((workout) => {
         const stats = workoutStats(workout)
+        const { startedAt, endedAt } = workout
         return (
           <details key={workout.id} className="card workout">
             <summary>
               <div className="workout-title">
                 <strong>{workout.type}</strong>
-                <span className={`badge difficulty-${workout.difficulty}`}>
-                  {difficultyLabel(workout.difficulty)}
-                </span>
+                {startedAt && endedAt && (
+                  <span className="muted small">{formatDuration(startedAt, endedAt)}</span>
+                )}
               </div>
-              <div className="muted">{formatDate(workout.date)}</div>
+              <div className="muted">
+                {formatDate(workout.date)}
+                {startedAt && ` · ${formatTime(startedAt)}`}
+                {startedAt && endedAt && `–${formatTime(endedAt)}`}
+              </div>
               <div className="muted small">
+                {workout.location && `${workout.location} · `}
                 {stats.exercises} exercise{stats.exercises === 1 ? '' : 's'} · {stats.sets} set
                 {stats.sets === 1 ? '' : 's'}
-                {stats.volume > 0 && ` · ${stats.volume.toLocaleString()} ${WEIGHT_UNIT} volume`}
+                {stats.volume > 0 && ` · ${stats.volume.toLocaleString()} ${WEIGHT_UNIT}`}
               </div>
             </summary>
 
             <ul className="exercise-list">
               {workout.exercises.map((exercise) => (
                 <li key={exercise.id}>
-                  <strong>{exercise.name}</strong>
+                  <div className="exercise-line">
+                    <strong>{exercise.name}</strong>
+                    <span className="muted small">{equipmentLabel(exercise.equipment)}</span>
+                    {exercise.difficulty && (
+                      <span className={`badge difficulty-${exercise.difficulty}`}>
+                        {difficultyLabel(exercise.difficulty)}
+                      </span>
+                    )}
+                  </div>
                   <span className="muted">
                     {exercise.sets.length ? exercise.sets.map(formatSet).join(', ') : 'No sets'}
                   </span>
+                  {exercise.notes && <span className="exercise-notes">{exercise.notes}</span>}
                 </li>
               ))}
             </ul>

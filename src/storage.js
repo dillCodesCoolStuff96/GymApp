@@ -1,9 +1,7 @@
-// All data access goes through this file. Workouts are stored in Supabase;
-// the in-progress draft stays on the device.
+// All data access goes through this file. Workouts are stored in Supabase
+// (see supabase/migrations); the in-progress draft stays on the device.
 
 import { supabase } from './supabase.js'
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // crypto.randomUUID only exists on https/localhost, so build a v4 UUID by hand
 // when the dev server is opened from a phone over the local network (plain http).
@@ -16,48 +14,99 @@ export function newId() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
+// A workout with its exercises and sets, fetched in one request.
+const WORKOUT_SELECT = `
+  id, date, started_at, ended_at, type, location, notes, created_at, updated_at,
+  workout_exercises (
+    id, position, difficulty, notes,
+    exercise:exercises ( id, name, equipment, muscle_group ),
+    sets ( id, position, weight, reps, grip )
+  )
+`
+
+const byPosition = (a, b) => a.position - b.position
+
 function fromRow(row) {
   return {
     id: row.id,
     date: row.date,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
     type: row.type,
-    difficulty: row.difficulty,
+    location: row.location,
     notes: row.notes,
-    exercises: row.exercises,
     createdAt: Date.parse(row.created_at),
     updatedAt: Date.parse(row.updated_at),
-  }
-}
-
-function toRow(workout) {
-  return {
-    id: workout.id,
-    date: workout.date,
-    type: workout.type,
-    difficulty: workout.difficulty,
-    notes: workout.notes,
-    exercises: workout.exercises,
-    created_at: new Date(workout.createdAt).toISOString(),
-    updated_at: new Date(workout.updatedAt).toISOString(),
+    exercises: row.workout_exercises.sort(byPosition).map((we) => ({
+      id: we.id,
+      exerciseId: we.exercise.id,
+      name: we.exercise.name,
+      equipment: we.exercise.equipment,
+      muscleGroup: we.exercise.muscle_group,
+      difficulty: we.difficulty,
+      notes: we.notes,
+      sets: we.sets.sort(byPosition).map((s) => ({
+        id: s.id,
+        weight: s.weight,
+        reps: s.reps,
+        grip: s.grip,
+      })),
+    })),
   }
 }
 
 export async function listWorkouts() {
   const { data, error } = await supabase
     .from('workouts')
-    .select('*')
+    .select(WORKOUT_SELECT)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false })
   if (error) throw error
   return data.map(fromRow)
 }
 
+// Built-in exercises plus the user's own custom ones.
+export async function listExercises() {
+  const { data, error } = await supabase
+    .from('exercises')
+    .select('id, name, equipment, muscle_group')
+    .order('name')
+  if (error) throw error
+  return data.map((e) => ({
+    id: e.id,
+    name: e.name,
+    equipment: e.equipment,
+    muscleGroup: e.muscle_group,
+  }))
+}
+
+// Saves the whole workout in one transaction via the save_workout function.
+// Exercises are matched by name + equipment; new names become custom exercises.
 export async function saveWorkout(workout) {
-  const { error } = await supabase.from('workouts').upsert(toRow(workout))
+  const { error } = await supabase.rpc('save_workout', {
+    workout: {
+      id: workout.id,
+      date: workout.date,
+      started_at: workout.startedAt,
+      ended_at: workout.endedAt,
+      type: workout.type,
+      location: workout.location,
+      notes: workout.notes,
+      exercises: workout.exercises.map((e) => ({
+        id: e.id,
+        name: e.name,
+        equipment: e.equipment,
+        difficulty: e.difficulty,
+        notes: e.notes,
+        sets: e.sets.map((s) => ({ id: s.id, weight: s.weight, reps: s.reps, grip: s.grip })),
+      })),
+    },
+  })
   if (error) throw error
   return workout
 }
 
+// Its exercises and sets are deleted along with it (on delete cascade).
 export async function deleteWorkout(id) {
   const { error } = await supabase.from('workouts').delete().eq('id', id)
   if (error) throw error
@@ -65,43 +114,30 @@ export async function deleteWorkout(id) {
 
 // ---------- Device storage ----------
 
-function readJson(key) {
+// An in-progress new workout is saved on every change, so closing the
+// browser tab mid-session at the gym doesn't lose anything.
+const DRAFT_KEY = 'gymapp.draft.v2'
+
+export function loadDraft() {
   try {
-    return JSON.parse(localStorage.getItem(key))
+    return JSON.parse(localStorage.getItem(DRAFT_KEY))
   } catch {
     return null
   }
 }
 
-function writeJson(key, value) {
+export function saveDraft(draft) {
   try {
-    if (value == null) localStorage.removeItem(key)
-    else localStorage.setItem(key, JSON.stringify(value))
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
   } catch {
-    // Device storage is a convenience; ignore failures (e.g. private mode).
+    // The draft is a convenience; ignore storage failures (e.g. private mode).
   }
 }
 
-// An in-progress new workout is saved on every change, so closing the
-// browser tab mid-session at the gym doesn't lose anything.
-const DRAFT_KEY = 'gymapp.draft.v1'
-
-export const loadDraft = () => readJson(DRAFT_KEY)
-export const saveDraft = (draft) => writeJson(DRAFT_KEY, draft)
-export const clearDraft = () => writeJson(DRAFT_KEY, null)
-
-// Workouts logged on this device before accounts existed.
-const LOCAL_WORKOUTS_KEY = 'gymapp.workouts.v1'
-
-export function countLocalWorkouts() {
-  return readJson(LOCAL_WORKOUTS_KEY)?.length ?? 0
-}
-
-export async function importLocalWorkouts() {
-  const workouts = readJson(LOCAL_WORKOUTS_KEY) ?? []
-  const rows = workouts.map((w) => toRow({ ...w, id: UUID_PATTERN.test(w.id) ? w.id : newId() }))
-  const { error } = await supabase.from('workouts').upsert(rows)
-  if (error) throw error
-  writeJson(LOCAL_WORKOUTS_KEY, null)
-  return rows.length
+export function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // Nothing to clear if storage is unavailable.
+  }
 }

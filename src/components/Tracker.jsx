@@ -3,9 +3,8 @@ import WorkoutForm from './WorkoutForm.jsx'
 import WorkoutHistory from './WorkoutHistory.jsx'
 import {
   clearDraft,
-  countLocalWorkouts,
   deleteWorkout,
-  importLocalWorkouts,
+  listExercises,
   listWorkouts,
   saveWorkout,
 } from '../storage.js'
@@ -14,16 +13,18 @@ import { supabase } from '../supabase.js'
 export default function Tracker({ user }) {
   const [tab, setTab] = useState('log')
   const [workouts, setWorkouts] = useState([])
+  const [catalog, setCatalog] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState(null)
   const [message, setMessage] = useState('')
-  const [localCount, setLocalCount] = useState(countLocalWorkouts)
 
+  // Saving can create custom exercises, so the catalog is reloaded too.
   function refresh() {
-    return listWorkouts()
-      .then((list) => {
-        setWorkouts(list)
+    return Promise.all([listWorkouts(), listExercises()])
+      .then(([workoutList, exerciseList]) => {
+        setWorkouts(workoutList)
+        setCatalog(exerciseList)
         setLoadError('')
       })
       .catch((err) => setLoadError(`Couldn't load workouts: ${err.message}`))
@@ -40,12 +41,11 @@ export default function Tracker({ user }) {
     return () => clearTimeout(timer)
   }, [message])
 
-  // Previously used exercise names, offered as suggestions while logging.
-  const exerciseNames = useMemo(() => {
-    const names = new Set()
-    for (const w of workouts) for (const e of w.exercises) names.add(e.name)
-    return [...names].sort()
-  }, [workouts])
+  // Previously used locations, offered as suggestions while logging.
+  const locations = useMemo(
+    () => [...new Set(workouts.map((w) => w.location).filter(Boolean))].sort(),
+    [workouts],
+  )
 
   // Errors propagate to WorkoutForm, which shows them and keeps the draft.
   async function handleSave(workout) {
@@ -72,17 +72,6 @@ export default function Tracker({ user }) {
     }
   }
 
-  async function handleImport() {
-    try {
-      const count = await importLocalWorkouts()
-      setLocalCount(0)
-      await refresh()
-      setMessage(`Imported ${count} workout${count === 1 ? '' : 's'}`)
-    } catch (err) {
-      alert(`Couldn't import: ${err.message}`)
-    }
-  }
-
   async function handleSignOut() {
     clearDraft()
     await supabase.auth.signOut()
@@ -105,18 +94,6 @@ export default function Tracker({ user }) {
         </div>
       </header>
 
-      {localCount > 0 && (
-        <div className="card banner">
-          <p>
-            {localCount} workout{localCount === 1 ? ' is' : 's are'} saved only on this device.
-            Add {localCount === 1 ? 'it' : 'them'} to your account?
-          </p>
-          <button type="button" className="primary" onClick={handleImport}>
-            Import
-          </button>
-        </div>
-      )}
-
       {loadError && <p className="error">{loadError}</p>}
 
       <main>
@@ -124,7 +101,8 @@ export default function Tracker({ user }) {
           <WorkoutForm
             key={editing?.id ?? 'new'}
             initial={editing}
-            exerciseNames={exerciseNames}
+            catalog={catalog}
+            locations={locations}
             onSave={handleSave}
             onCancel={() => switchTab('history')}
           />

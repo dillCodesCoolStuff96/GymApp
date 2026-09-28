@@ -1,4 +1,5 @@
--- GymApp database schema. Run this once in the Supabase SQL Editor.
+-- Initial schema: one workouts table with exercises stored as JSON.
+-- Replaced by 002_split_tables.sql.
 
 create table public.workouts (
   id uuid primary key default gen_random_uuid(),

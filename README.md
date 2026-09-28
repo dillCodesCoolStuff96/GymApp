@@ -4,7 +4,7 @@ A mobile-first workout tracker. Log the date, workout type, difficulty, exercise
 
 ## Setup
 
-1. Create a Supabase project and run `supabase/schema.sql` in its SQL Editor.
+1. Create a Supabase project and run each file in `supabase/migrations/`, in order, in its SQL Editor.
 2. Copy `.env.example` to `.env.local` and fill in the project URL and publishable key.
 3. Run:
 
@@ -17,7 +17,7 @@ Open the "Local" URL on your computer, or the "Network" URL on a phone connected
 
 ## Where data is stored
 
-Workouts are stored in Supabase (Postgres): one row per workout, with its exercises and sets in a JSON column. Row Level Security ensures each user can only access their own workouts. All data access goes through `src/storage.js`.
+Workouts are stored in Supabase (Postgres) across four tables: `workouts` (one per session), `exercises` (built-in list plus each user's custom ones), `workout_exercises` (an exercise done in a workout, with difficulty and notes) and `sets` (weight, reps, grip). Workouts are saved through the `save_workout` database function so a workout is never half-saved. Row Level Security ensures each user can only access their own data. All data access goes through `src/storage.js`.
 
 ## Project layout
 
@@ -29,4 +29,4 @@ Workouts are stored in Supabase (Postgres): one row per workout, with its exerci
 - `src/workout.js` — constants (types, difficulty, units) and formatting helpers
 - `src/storage.js` — saving and loading workouts
 - `src/supabase.js` — Supabase client
-- `supabase/schema.sql` — database table and security rules
+- `supabase/migrations/` — database tables, security rules and the save function
