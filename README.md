@@ -17,7 +17,7 @@ Open the "Local" URL on your computer, or the "Network" URL on a phone connected
 
 ## Where data is stored
 
-Workouts are stored in Supabase (Postgres) across four tables: `workouts` (one per session), `exercises` (built-in list plus each user's custom ones), `workout_exercises` (an exercise done in a workout, with difficulty and notes) and `sets` (weight, reps, grip). Workouts are saved through the `save_workout` database function so a workout is never half-saved. Row Level Security ensures each user can only access their own data. All data access goes through `src/storage.js`.
+Workouts are stored in Supabase (Postgres) across four tables: `workouts` (one per session), `exercises` (built-in list plus each user's custom ones), `workout_exercises` (an exercise done in a workout, with difficulty and notes) and `sets` (weight, reps, grip). Exercises and sets also record start and end times from the set timer. Workouts are saved through the `save_workout` database function so a workout is never half-saved. Row Level Security ensures each user can only access their own data. All data access goes through `src/storage.js`.
 
 ## Project layout
 

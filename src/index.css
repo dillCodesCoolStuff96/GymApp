@@ -497,3 +497,60 @@ select {
   font-style: italic;
   color: var(--muted);
 }
+
+/* ---------- Timer ---------- */
+
+.workout-form.has-timer {
+  padding-bottom: 80px;
+}
+
+.timer-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--tab-height) + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.timer-status {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.timer-label {
+  overflow: hidden;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timer-clock {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-button {
+  flex: none;
+  min-width: 140px;
+}
+
+.timer-button.done {
+  background: var(--danger);
+}
+
+.set-timing {
+  padding: 2px 0 0 34px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}

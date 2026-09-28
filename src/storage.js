@@ -18,9 +18,9 @@ export function newId() {
 const WORKOUT_SELECT = `
   id, date, started_at, ended_at, type, location, notes, created_at, updated_at,
   workout_exercises (
-    id, position, difficulty, notes,
+    id, position, difficulty, notes, started_at, ended_at,
     exercise:exercises ( id, name, equipment, muscle_group ),
-    sets ( id, position, weight, reps, grip )
+    sets ( id, position, weight, reps, grip, started_at, ended_at )
   )
 `
 
@@ -45,11 +45,15 @@ function fromRow(row) {
       muscleGroup: we.exercise.muscle_group,
       difficulty: we.difficulty,
       notes: we.notes,
+      startedAt: we.started_at,
+      endedAt: we.ended_at,
       sets: we.sets.sort(byPosition).map((s) => ({
         id: s.id,
         weight: s.weight,
         reps: s.reps,
         grip: s.grip,
+        startedAt: s.started_at,
+        endedAt: s.ended_at,
       })),
     })),
   }
@@ -98,7 +102,16 @@ export async function saveWorkout(workout) {
         equipment: e.equipment,
         difficulty: e.difficulty,
         notes: e.notes,
-        sets: e.sets.map((s) => ({ id: s.id, weight: s.weight, reps: s.reps, grip: s.grip })),
+        started_at: e.startedAt,
+        ended_at: e.endedAt,
+        sets: e.sets.map((s) => ({
+          id: s.id,
+          weight: s.weight,
+          reps: s.reps,
+          grip: s.grip,
+          started_at: s.startedAt,
+          ended_at: s.endedAt,
+        })),
       })),
     },
   })

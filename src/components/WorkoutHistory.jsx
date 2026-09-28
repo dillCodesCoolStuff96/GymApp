@@ -2,12 +2,28 @@ import {
   WEIGHT_UNIT,
   difficultyLabel,
   equipmentLabel,
+  formatClock,
   formatDate,
   formatDuration,
   formatSet,
   formatTime,
+  restBeforeSets,
   workoutStats,
 } from '../workout.js'
+
+// "12m · avg rest 1:45", or '' when the exercise wasn't timed.
+function exerciseTiming(exercise) {
+  const parts = []
+  if (exercise.startedAt && exercise.endedAt) {
+    parts.push(formatDuration(exercise.startedAt, exercise.endedAt))
+  }
+  const rests = restBeforeSets(exercise.sets).filter((r) => r != null)
+  if (rests.length) {
+    const average = Math.round(rests.reduce((sum, r) => sum + r, 0) / rests.length)
+    parts.push(`avg rest ${formatClock(average)}`)
+  }
+  return parts.join(' · ')
+}
 
 export default function WorkoutHistory({ workouts, onEdit, onDelete }) {
   if (workouts.length === 0) {
@@ -62,6 +78,9 @@ export default function WorkoutHistory({ workouts, onEdit, onDelete }) {
                   <span className="muted">
                     {exercise.sets.length ? exercise.sets.map(formatSet).join(', ') : 'No sets'}
                   </span>
+                  {exerciseTiming(exercise) && (
+                    <span className="muted small">⏱ {exerciseTiming(exercise)}</span>
+                  )}
                   {exercise.notes && <span className="exercise-notes">{exercise.notes}</span>}
                 </li>
               ))}

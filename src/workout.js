@@ -88,6 +88,26 @@ export function formatTime(iso) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
+export function secondsBetween(startIso, endIso) {
+  return Math.max(0, Math.round((Date.parse(endIso) - Date.parse(startIso)) / 1000))
+}
+
+// Stopwatch style: 0:42, 12:05, 1:02:05.
+export function formatClock(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return hours ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`
+}
+
+// Seconds of rest before each set (null when either set wasn't timed).
+export function restBeforeSets(sets) {
+  return sets.map((set, i) => {
+    const previous = sets[i - 1]
+    return set.startedAt && previous?.endedAt ? secondsBetween(previous.endedAt, set.startedAt) : null
+  })
+}
+
 export function formatDuration(startIso, endIso) {
   const minutes = Math.round((Date.parse(endIso) - Date.parse(startIso)) / 60000)
   const hours = Math.floor(minutes / 60)
@@ -96,11 +116,13 @@ export function formatDuration(startIso, endIso) {
 
 // ---------- Summaries ----------
 
-export function formatSet({ weight, reps, grip }) {
+export function formatSet({ weight, reps, grip, startedAt, endedAt }) {
   let text = '—'
   if (weight != null && reps != null) text = `${weight}×${reps}`
   else if (reps != null) text = `${reps} reps`
   else if (weight != null) text = `${weight} ${WEIGHT_UNIT}`
+  // Timed-only sets, like a plank.
+  else if (startedAt && endedAt) text = formatClock(secondsBetween(startedAt, endedAt))
   return grip ? `${text} ${grip.toLowerCase()}` : text
 }
 
