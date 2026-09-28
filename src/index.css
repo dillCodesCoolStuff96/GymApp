@@ -122,7 +122,7 @@ h2 {
 
 .row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -604,4 +604,23 @@ select {
 /* Room for HH:MM:SS AM on small screens; tapping still opens the picker. */
 .time-range input::-webkit-calendar-picker-indicator {
   display: none;
+}
+
+/* iOS Safari gives date/time inputs a native look with a built-in minimum
+   width, their own height and centered text, which squeezes them in grids. */
+input[type='date'],
+input[type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  height: 44px;
+}
+
+.time-range input[type='time'] {
+  height: 40px;
+}
+
+input::-webkit-date-and-time-value {
+  text-align: left;
 }
